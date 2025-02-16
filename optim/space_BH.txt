@@ -1,0 +1,3 @@
+RadioModeEfficiency,eRadio,0,0.001,0.15
+QuasarModeEfficiency,eQuasar,0,0.001,0.015
+BlackHoleGrowthRate,eBhgrow,0,0.005,0.2
