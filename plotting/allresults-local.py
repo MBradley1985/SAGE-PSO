@@ -995,8 +995,7 @@ if __name__ == '__main__':
     print('Saved file to', outputFile, '\n')
     plt.close()
 
-    # Replace the existing density plot section with:
-    plt.figure(figsize=(15,7))  # Wider figure to accommodate two plots
+    plt.figure(figsize=(10,10))  # Wider figure to accommodate two plots
 
     # Galaxy number density 
     w = np.where((Mvir > 0.0) & (StellarMass > 0.1))[0]

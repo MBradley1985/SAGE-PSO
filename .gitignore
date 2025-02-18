@@ -57,3 +57,14 @@ src/io/read_tree_lhalo_binary.o
 src/io/read_tree_lhalo_hdf5.o
 src/io/save_gals_binary.o
 src/io/save_gals_hdf5.o
+bhbm_binned_all_redshifts.csv
+bhmf_all_redshifts.csv
+halostellar_binned_all_redshifts.csv
+smf_all_redshifts.csv
+input/millennium.par
+output/millennium/plots/A.BlackholeBulgeMass_z.png
+output/millennium/plots/A.BlackHoleMassFunction_z.png
+output/millennium/plots/A.HaloStellarMass_z.png
+output/millennium/plots/A.StellarMassFunction_z.png
+output/millennium/plots/B.History-SFR-density.png
+output/millennium/plots/C.History-stellar-mass-density.png
