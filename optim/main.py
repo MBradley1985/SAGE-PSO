@@ -52,11 +52,11 @@ def get_required_snapshots(constraints_str):
     """Get all unique snapshots needed for constraints"""
     # Map of constraint classes to their snapshots 
     snapshot_map = {
-        'SMF_z0': [63],
+        'SMF_z0': [49],
         'SMF_z02': [43],
         'SMF_z05': [38],
         'SMF_z08': [34],
-        'SMF_z10': [31], 
+        'SMF_z10': [32], 
         'SMF_z11': [31],
         'SMF_z15': [27],
         'SMF_z20': [23],
@@ -73,9 +73,7 @@ def get_required_snapshots(constraints_str):
         'BHMF_z20': [23],
         'BHBM_z0': [49],
         'BHBM_z20': [23],
-        'HSMR_z0': [63],
-        'H1MF_z0': [63],
-        'H2MF_z0': [63]
+        'HSMR_z0': [49]
     }
     
     snapshots = set()

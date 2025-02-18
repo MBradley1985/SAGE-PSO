@@ -54,7 +54,7 @@ def extract_parameter_data(filepath):
 def plot_parameter_grid():
 
     def get_marker_style(label):
-        if 'FREE restricted 2 swarm' in label:
+        if 'SMF @ z=0,1,2 ALL swarm' in label:
             return '*'  # Star marker
         return 'o'     # Default circular marker
     
@@ -79,7 +79,12 @@ def plot_parameter_grid():
         "SMF @ z=1 focused swarm": "/fred/oz004/mbradley/sage-model/output/miniuchuu_pso_SMFz1",
         "SMF @ z=2 focused swarm": "/fred/oz004/mbradley/sage-model/output/miniuchuu_pso_SMFz2",
         "SMF @ z=0,1 focused swarm": "/fred/oz004/mbradley/sage-model/output/miniuchuu_pso_SMFz0z1",
-        "SMF @ z=0,1,2 focused swarm": "/fred/oz004/mbradley/sage-model/output/miniuchuu_pso_SMFz0z1z2"
+        "SMF @ z=0,1,2 focused swarm": "/fred/oz004/mbradley/sage-model/output/miniuchuu_pso_SMFz0z1z2",
+        "SMF @ z=0 ALL swarm": "/fred/oz004/mbradley/sage-model/output/miniuchuu_pso_SMFz0_all",
+        "SMF @ z=1 ALL swarm": "/fred/oz004/mbradley/sage-model/output/miniuchuu_pso_SMFz1_all",
+        "SMF @ z=2 ALL swarm": "/fred/oz004/mbradley/sage-model/output/miniuchuu_pso_SMFz2_all",
+        "SMF @ z=0,1 ALL swarm": "/fred/oz004/mbradley/sage-model/output/miniuchuu_pso_SMFz0z1_all",
+        "SMF @ z=0,1,2 ALL swarm": "/fred/oz004/mbradley/sage-model/output/miniuchuu_pso_SMFz0z1z2_all"
     }
 
     space_files = {
@@ -103,7 +108,12 @@ def plot_parameter_grid():
         "SMF @ z=1 focused swarm": "/fred/oz004/mbradley/sage-model/autocalibration/space_SMF.txt",
         "SMF @ z=2 focused swarm": "/fred/oz004/mbradley/sage-model/autocalibration/space_SMF.txt",
         "SMF @ z=0,1 focused swarm": "/fred/oz004/mbradley/sage-model/autocalibration/space_SMF.txt",
-        "SMF @ z=0,1,2 focused swarm": "/fred/oz004/mbradley/sage-model/autocalibration/space_SMF.txt"
+        "SMF @ z=0,1,2 focused swarm": "/fred/oz004/mbradley/sage-model/autocalibration/space_SMF.txt",
+        "SMF @ z=0 ALL swarm": "/fred/oz004/mbradley/sage-model/autocalibration/space_restricted_bounds.txt",
+        "SMF @ z=1 ALL swarm": "/fred/oz004/mbradley/sage-model/autocalibration/space_restricted_bounds.txt",
+        "SMF @ z=2 ALL swarm": "/fred/oz004/mbradley/sage-model/autocalibration/space_restricted_bounds.txt",
+        "SMF @ z=0,1 ALL swarm": "/fred/oz004/mbradley/sage-model/autocalibration/space_restricted_bounds.txt",
+        "SMF @ z=0,1,2 ALL swarm": "/fred/oz004/mbradley/sage-model/autocalibration/space_restricted_bounds.txt"
     }
 
     # Collect parameter data from all folders

@@ -1,5 +1,5 @@
 SfrEfficiency,SFE,0,0.001,0.1
-FeedbackReheatingEpsilon,eHeat,0,2.0,4.0
+FeedbackReheatingEpsilon,eHeat,0,1.0,5.0
 FeedbackEjectionEfficiency,eEject,0,0.005,1.0
 ReIncorporationFactor,eRein,0,0.01,0.25
 RadioModeEfficiency,eRadio,0,0.001,0.15

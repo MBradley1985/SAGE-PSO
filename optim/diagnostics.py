@@ -30,8 +30,8 @@ import pandas as pd # type: ignore
 import matplotlib.colors # type: ignore
 from redshift_utils import get_redshift_info, get_all_redshifts
 from scipy import stats
-from sklearn.linear_model import LinearRegression # type: ignore
-import matplotlib.colors as cols # type: ignore
+from sklearn.linear_model import LinearRegression
+import matplotlib.colors as cols
 from pso_uncertainty import analyze_pso_uncertainties, plot_parameter_distributions, \
                          create_uncertainty_report, analyze_and_plot
 
@@ -398,9 +398,7 @@ def plot_parameter_evolution(particle_data, best_params, best_scores, param_name
         'Reincorporation efficiency': 'ReIncorporationFactor',
         'Radio Mode': 'RadioModeEfficiency',
         'Quasar Mode': 'QuasarModeEfficiency',
-        'Black Hole growth': 'BlackHoleGrowthRate',
-        'H2FractionFactor': 'H2FractionFactor',
-        'H2FractionExponent': 'H2FractionExponent'
+        'Black Hole growth': 'BlackHoleGrowthRate'
     }
     
     # Get parameters actually defined in space file
@@ -3399,7 +3397,7 @@ def processing(tracks_dir, space_file, output_dir, config_opts, space=None):
     # Load parameter values
     logger.info("Processing parameter evolution...")
     param_names = ['SFR efficiency', 'Reheating epsilon', 'Ejection efficiency', 'Reincorporation efficiency',
-                   'Radio Mode', 'Quasar Mode', 'Black Hole growth', 'H2FractionFactor', 'H2FractionExponent']
+                   'Radio Mode', 'Quasar Mode', 'Black Hole growth']
     
     # Map the file numbers to actual redshifts
     redshift_map = {

@@ -61,25 +61,7 @@ def chi2(obs, mod, err):
     #chi2 = np.nan_to_num(chi2, nan=0.0)
     #print(chi2)
     return chi2
-"""
-@npsum
-def studentT(obs, mod, err):
-    # Check if 'err' is an array of zeroes
-    if np.all(err == 0):
-        err = np.std(obs)
-        #print(err)
-        
-    sigma = (obs - mod) / err
-    var = sum(sigma ** 2 / len(sigma))
-    nu = (2 * var) / (var - 1)
-    x = (mod - obs) ** 2 / err
-    t = (
-        (scipy.special.gamma((nu + 1) / 2.0))
-        / ((nu * math.pi) ** (0.5) * scipy.special.gamma(nu / 2.0))
-        * (1 + x / nu) ** (-1 * (nu + 1) / 2.0)
-    )
-    return -1.0 * np.log(t)
-"""
+
 @npsum
 def studentT(obs, mod, err):
     # Ensure errors are valid

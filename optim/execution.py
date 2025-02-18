@@ -45,33 +45,7 @@ def count_jobs(job_name, username=None):
             
     except OSError:
         raise RuntimeError("Couldn't run squeue, is it installed?")
-"""
-def count_jobs(job_name):
-    Returns how many jobs with job_name are currently queued or running
-    try:
-        out, err, code = common.exec_command("squeue")
-    except OSError:
-        raise RuntimeError("Couldn't run squeue, is it installed?")
 
-    if code:
-        raise RuntimeError("squeue failed with code %d: stdout: %s, stderr: %s" % (code, out, err))
-
-    # Convert bytes to string if necessary
-    if isinstance(out, bytes):
-        out = out.decode('utf-8')
-
-    lines_with_jobname = [l for l in out.splitlines() if job_name in l]
-    return len(lines_with_jobname)
-
-
-#This is the one that allows me to see the SAGE output
-def _exec_sage(msg, cmdline):
-    logger.info('%s with command line: %s', msg, subprocess.list2cmdline(cmdline))
-    # Run without capturing output
-    code = subprocess.call(cmdline)
-    if code != 0:
-        raise RuntimeError('%s error' % cmdline[0])
-"""
 #This is the original function and is just fine
 def _exec_sage(msg, cmdline):
     logger.info('%s with command line: %s', msg, subprocess.list2cmdline(cmdline))
@@ -148,7 +122,7 @@ def run_sage_hpc(particles, *args):
                 f.write("#SBATCH --error=/dev/null\n\n")
                 f.write(f"#SBATCH --ntasks={opts.cpus}\n")
                 f.write(f"#SBATCH --mem-per-cpu={opts.memory}\n")
-                f.write("#SBATCH --tmp=12GB\n")
+                f.write("#SBATCH --tmp=200GB\n")
 
                 if opts.walltime:
                     f.write(f"#SBATCH --time={opts.walltime}\n")
@@ -193,10 +167,6 @@ def run_sage_hpc(particles, *args):
             # Extract job ID from sbatch output
             jobid = out.decode().strip().split()[-1]
             processes.append((i, jobid, temp_filename, particle_dir, batch_script))
-                
-            # Extract job ID from sbatch output
-            jobid = out.decode().strip().split()[-1]
-            processes.append((i, jobid, temp_filename, particle_dir))
 
         # Wait for all SLURM jobs to complete
         logger.info('Waiting for all SLURM jobs to complete...')
@@ -277,8 +247,8 @@ def run_sage_hpc(particles, *args):
             i, process, temp_filename, particle_dir = item
             
         # Process results with retries
-        max_retries = 50
-        retry_delay = 600
+        max_retries = 1
+        retry_delay = 10
         success = False
         #logger.info("Processing everything, combining HDF5 files if needed, etc. etc. etc.")
         
@@ -291,17 +261,11 @@ def run_sage_hpc(particles, *args):
             except Exception as e:
                 logger.warning(f"Attempt {retry+1}: Error evaluating particle: {e}")
                 time.sleep(retry_delay)
-
+                
         if not success:
-            raise RuntimeError(f"Failed to process outputs for particle {i} after {max_retries} attempts")
-
-        # Clean up parameter file and batch script
-        try:
-            os.remove(temp_filename)
-            if use_slurm and batch_script:
-                os.remove(batch_script)
-        except OSError:
-            pass
+            logger.warning(f"Failed to process outputs for particle {i}  - assigning penalty score")
+            logger.warning("This usually means SAGE is unhappy, bad parameter combination")
+            fx[i] = 1e10
 
         # Clean up parameter file and batch script
         try:

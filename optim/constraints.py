@@ -43,13 +43,6 @@ ssfrupp = 4
 dssfr = 0.2
 ssfrbins = np.arange(ssfrlow,ssfrupp,dssfr)
 
-mupp3 = 11.5
-dm3 = 0.1
-mlow3 = 8
-mbins3 = np.arange(mlow3,mupp3,dm3)
-xmf3 = mbins3
-xmf4 = mbins3  
-
 Nmin = 2 # minimum number of galaxies expected in a mass bin for the simulation volume, based on observations, to warrant fitting to that bin for mass functions
 
 # These are two easily create variables of these different shapes without
@@ -60,10 +53,6 @@ zeros3 = lambda: np.zeros(shape=(1, len(mbins)))
 zeros4 = lambda: np.empty(shape=(1), dtype=np.bool_)
 zeros5 = lambda: np.zeros(shape=(1, len(ssfrbins)))
 zeros6 = lambda: np.zeros(shape=(1, len(mbins2)))
-zeros7 = lambda: np.zeros(shape=(1, len(xmf3)))
-zeros8 = lambda: np.zeros(shape=(1, len(mbins3)))
-zeros9 = lambda: np.zeros(shape=(1, len(xmf4)))
-zeros10 = lambda: np.zeros(shape=(1, len(mbins3)))
 
 class Constraint(object):
     """Base classes for constraint objects"""
@@ -116,11 +105,9 @@ class Constraint(object):
             # Histograms we are interested in
             hist_smf = zeros3()
             hist_bhmf = zeros6()
-            hist_H1mf = zeros8()
-            hist_H2mf = zeros10()
 
             seed(2222)
-            fields = ['StellarMass', 'BlackHoleMass', 'Len', 'SfrBulge', 'BulgeMass', 'Mvir', 'H1_gas', 'H2_gas']
+            fields = ['StellarMass', 'BlackHoleMass', 'Len', 'SfrBulge', 'BulgeMass', 'Mvir']
             Nage = 14
             snap_num = f'Snap_{snap}'
 
@@ -141,12 +128,11 @@ class Constraint(object):
                         combined_properties[field] = np.concatenate((combined_properties[field], G[field]))
             
             G = combined_properties
-            #print(len(G['StellarMass']))
-      
+            print('Number of galaxies: ', len(G['StellarMass']))
         else:
             G = r.read_sage_hdf(os.path.join(modeldir, 'model_0.hdf5'), snap_num=snap_num, fields=fields)
-            print(len(G['StellarMass']))
-    
+            print('Number of galaxies: ', len(G['StellarMass']))
+
         # Process properties - Use self.h0 instead of h0
         BlackHoleMass = np.log10(G['BlackHoleMass'] * 1e10 / self.h0)
         BlackHoleMass[~np.isfinite(BlackHoleMass)] = -20
@@ -166,20 +152,6 @@ class Constraint(object):
         logBHM[~np.isfinite(logBHM)] = -20
         hist_bhmf, _ = np.histogram(logBHM, bins=mbins2)
         hist_bhmf = hist_bhmf / dm2 / self.vol
-
-        logH1 = np.log10(G['H1_gas'] * 1e10 / self.h0)
-        logH1[~np.isfinite(logH1)] = -20
-        hist_H1mf, _ = np.histogram(logH1, bins=mbins3)
-        hist_H1mf = hist_H1mf / dm3 / self.vol
-
-        logH2 = np.log10(G['H2_gas'] * 1e10 / self.h0)
-        logH2[~np.isfinite(logH2)] = -20
-        hist_H2mf, _ = np.histogram(logH2, bins=mbins3)
-        hist_H2mf = hist_H2mf / dm3 / self.vol
-
-        #print(logH2)
-        #print(logH1)
-        #print(logSM)
             
         # get the edges of the age bins
         # Load and convert scale factors to redshifts
@@ -210,23 +182,14 @@ class Constraint(object):
         ind = (hist_bhmf > 0.)
         hist_bhmf[ind] = np.log10(hist_bhmf[ind])
         hist_bhmf[~ind] = -20
-        ind = (hist_H1mf > 0.)
-        hist_H1mf[ind] = np.log10(hist_H1mf[ind])
-        hist_H1mf[~ind] = -20
-        ind = (hist_H2mf > 0.)
-        hist_H2mf[ind] = np.log10(hist_H2mf[ind])
-        hist_H2mf[~ind] = -20
-
         SFRD_Age = np.log10(SFRbyAge/self.vol)
         SFRD_Age[~np.isfinite(SFRD_Age)] = -20
         
         # have moved where this was in the code. Don't understand its purpose
         hist_bhmf = hist_bhmf[np.newaxis]
         hist_smf = hist_smf[np.newaxis]
-        hist_H1mf = hist_H1mf[np.newaxis]
-        hist_H2mf = hist_H2mf[np.newaxis]
 
-        return self.h0, self.Omega0, hist_smf, hist_bhmf, TimeBinEdge, SFRD_Age, BlackHoleMass, BulgeMass, HaloMass, StellarMass, hist_H1mf, hist_H2mf
+        return self.h0, self.Omega0, hist_smf, hist_bhmf, TimeBinEdge, SFRD_Age, BlackHoleMass, BulgeMass, HaloMass, StellarMass
 
 
     def load_observation(self, *args, **kwargs):
@@ -410,72 +373,22 @@ class Constraint(object):
         plt.close()
         return
 
-    def plot_H1mf(self, x_obs, y_obs, y_mod, x_sage, y_sage, output_dir):
-        """Plot Stellar Mass Function comparison"""
-        plt.figure()  # New figure
-        ax = plt.subplot(111)  # 1 plot on the figure
-
-        y_sage_converted = [10**y for y in y_sage]
-
-        plt.plot(x_obs, 10**y_mod, c='b', label='Model - SAGE')
-        plt.plot(x_sage, y_sage_converted, c='k', label='SAGE')
-        plt.plot(x_obs, 10**y_obs, c='r', label='Observation')
-
-        plt.yscale('log')
-        plt.axis([8.0, 12.2, 1.0e-6, 1.0e-1])
-        ax.xaxis.set_minor_locator(plt.MultipleLocator(0.1))
-        plt.ylabel(r'$\phi\ (\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1})$')
-        plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
-        leg = plt.legend(loc='upper right', numpoints=1, labelspacing=0.1)
-        leg.draw_frame(False)
-        for t in leg.get_texts():
-            t.set_fontsize('medium')
-        plotfile = os.path.join(output_dir, 'h1mf_sage.png')
-        plt.savefig(plotfile, dpi=100)
-        plt.close()
-        return
-    
-    def plot_H2mf(self, x_obs, y_obs, y_mod, x_sage, y_sage, output_dir):
-        """Plot Stellar Mass Function comparison"""
-        plt.figure()  # New figure
-        ax = plt.subplot(111)  # 1 plot on the figure
-
-        y_sage_converted = [10**y for y in y_sage]
-
-        plt.plot(x_obs, 10**y_mod, c='b', label='Model - SAGE')
-        plt.plot(x_sage, y_sage_converted, c='k', label='SAGE')
-        plt.plot(x_obs, 10**y_obs, c='r', label='Observation')
-
-        plt.yscale('log')
-        plt.axis([8.0, 12.2, 1.0e-6, 1.0e-1])
-        ax.xaxis.set_minor_locator(plt.MultipleLocator(0.1))
-        plt.ylabel(r'$\phi\ (\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1})$')
-        plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
-        leg = plt.legend(loc='upper right', numpoints=1, labelspacing=0.1)
-        leg.draw_frame(False)
-        for t in leg.get_texts():
-            t.set_fontsize('medium')
-        plotfile = os.path.join(output_dir, 'h2mf_sage.png')
-        plt.savefig(plotfile, dpi=100)
-        plt.close()
-        return
-
     def _get_raw_data(self, modeldir, subvols):
         """Gets the model and observational data for further analysis.
         The model data is interpolated to match the observation's X values."""
 
-        self.h0, self.Omega0, hist_smf, hist_bhmf, TimeBinEdge, SFRD_Age, BlackHoleMass, BulgeMass, HaloMass, StellarMass, hist_H1mf, hist_H2mf = self._load_model_data(modeldir, subvols)
+        self.h0, self.Omega0, hist_smf, hist_bhmf, TimeBinEdge, SFRD_Age, BlackHoleMass, BulgeMass, HaloMass, StellarMass = self._load_model_data(modeldir, subvols)
         x_obs, y_obs, y_dn, y_up = self.get_obs_x_y_err()
         x_sage, y_sage = self.get_sage_x_y()
-        x_mod, y_mod = self.get_model_x_y(hist_smf, hist_bhmf, TimeBinEdge, SFRD_Age, BlackHoleMass, BulgeMass, HaloMass, StellarMass, hist_H1mf, hist_H2mf)
+        x_mod, y_mod = self.get_model_x_y(hist_smf, hist_bhmf, TimeBinEdge, SFRD_Age, BlackHoleMass, BulgeMass, HaloMass, StellarMass)
         return x_obs, y_obs, y_dn, y_up, x_sage, y_sage, x_mod, y_mod
 
     def get_data(self, modeldir, subvols):
 
-        self.h0, self.Omega0, hist_smf, hist_bhmf, TimeBinEdge, SFRD_Age, BlackHoleMass, BulgeMass, HaloMass, StellarMass, hist_H1mf, hist_H2mf = self._load_model_data(modeldir, subvols)
+        self.h0, self.Omega0, hist_smf, hist_HImf, TimeBinEdge, SFRD_Age, BlackHoleMass, BulgeMass, HaloMass, StellarMass = self._load_model_data(modeldir, subvols)
         x_obs, y_obs, y_dn, y_up = self.get_obs_x_y_err()
         x_sage, y_sage = self.get_sage_x_y()
-        x_mod, y_mod = self.get_model_x_y(hist_smf, hist_bhmf, TimeBinEdge, SFRD_Age, BlackHoleMass, BulgeMass, HaloMass, StellarMass, hist_H1mf, hist_H2mf)
+        x_mod, y_mod = self.get_model_x_y(hist_smf, hist_HImf, TimeBinEdge, SFRD_Age, BlackHoleMass, BulgeMass, HaloMass, StellarMass)
 
         # Linearly interpolate model Y values respect to the observations'
         # X values, and only take those within the domain.
@@ -513,10 +426,6 @@ class Constraint(object):
             self.plot_bhbm(x_obs, y_obs, y_mod, x_sage, y_sage, BlackHoleMass, BulgeMass, self.output_dir)
         if 'HSMR' in constraint_name:
             self.plot_hsmr(x_obs, y_obs, y_mod, x_sage, y_sage, HaloMass, StellarMass, self.output_dir)
-        if 'H1MF' in constraint_name:
-            self.plot_H1mf(x_obs, y_obs, y_mod, x_sage, y_sage, self.output_dir)
-        if 'H2MF' in constraint_name:
-            self.plot_H2mf(x_obs, y_obs, y_mod, x_sage, y_sage, self.output_dir)
 
 
         return y_obs[ind], y_mod[ind], err
@@ -532,7 +441,7 @@ class BHMF(Constraint):
 
     domain = (6, 10)
 
-    def get_model_x_y(self, _, hist_bhmf, _2, _3, _4, _5, _6, _7, _8, _9):
+    def get_model_x_y(self, _, hist_bhmf, _2, _3, _4, _5, _6, _7):
         y = hist_bhmf[0]
         ind = np.where(y < 0.)
 
@@ -813,7 +722,7 @@ class SMF(Constraint):
 
     domain = (8, 12)
 
-    def get_model_x_y(self, hist_smf, _, _2, _3, _4, _5, _6, _7, _8, _9):
+    def get_model_x_y(self, hist_smf, _, _2, _3, _4, _5, _6, _7):
         y = hist_smf[0,:]
         ind = np.where(y < 0.)
         return xmf[ind], y[ind]
@@ -1318,7 +1227,7 @@ class BHBM(Constraint):
 
     domain = (8, 12)
 
-    def get_model_x_y(self, _, _2, _3, _4, BlackHoleMass, BulgeMass, _5, _6, _7, _8):
+    def get_model_x_y(self, _, _2, _3, _4, BlackHoleMass, BulgeMass, _5, _6):
         y = BlackHoleMass
         x = BulgeMass
 
@@ -1385,7 +1294,7 @@ class HSMR(Constraint):
 
     domain = (11, 15)
 
-    def get_model_x_y(self, _, _2, _3, _4, _5, _6, HaloMass, StellarMass, _7):
+    def get_model_x_y(self, _, _2, _3, _4, _5, _6, HaloMass, StellarMass):
         y = StellarMass
         x = HaloMass
 
@@ -1526,155 +1435,6 @@ class HSMR_z40(HSMR):
         y_sage = stellarmass
 
         return x_sage, y_sage
-    
-class H1MF(Constraint):
-    """Common logic for SMF constraints"""
-
-    domain = (8, 12)
-
-    def get_model_x_y(self, _, _2, _3, _4, _5, _6, _7, _8, hist_H1mf, _9):
-        y = hist_H1mf[0,:]
-        ind = np.where(y < 0.)
-        return xmf3[ind], y[ind]
-
-class H1MF_z0(H1MF):
-    """The SMF constraint at z=0"""
-
-    z = [0]
-
-    def get_obs_x_y_err(self):
-
-        Zwaan = np.array([[6.933,   -0.333],
-        [7.057,   -0.490],
-        [7.209,   -0.698],
-        [7.365,   -0.667],
-        [7.528,   -0.823],
-        [7.647,   -0.958],
-        [7.809,   -0.917],
-        [7.971,   -0.948],
-        [8.112,   -0.927],
-        [8.263,   -0.917],
-        [8.404,   -1.062],
-        [8.566,   -1.177],
-        [8.707,   -1.177],
-        [8.853,   -1.312],
-        [9.010,   -1.344],
-        [9.161,   -1.448],
-        [9.302,   -1.604],
-        [9.448,   -1.792],
-        [9.599,   -2.021],
-        [9.740,   -2.406],
-        [9.897,   -2.615],
-        [10.053,  -3.031],
-        [10.178,  -3.677],
-        [10.335,  -4.448],
-        [10.492,  -5.083]        ], dtype=np.float32)
-
-        x_obs = np.log10(10**(Zwaan[:, 0]) /self.h0/self.h0)
-        y_obs = np.log10((10**(Zwaan[:, 1]) * self.h0*self.h0*self.h0))
-        err = np.zeros(len(y_obs))
-
-
-        return x_obs, y_obs, err, err
-    
-    def get_sage_x_y(self):
-        x_sage = [
-            8.023931623931624, 8.08974358974359, 8.161538461538461, 8.239316239316238, 
-            8.341025641025642, 8.436752136752137, 8.526495726495726, 8.622222222222222, 
-            8.747863247863247, 8.843589743589744, 8.921367521367522, 9.005128205128205, 
-            9.082905982905983, 9.154700854700854, 9.22051282051282, 9.292307692307691, 
-            9.388034188034188, 9.465811965811966, 9.54957264957265, 9.597435897435897, 
-            9.669230769230769, 9.74102564102564, 9.8008547008547, 9.848717948717947, 
-            9.926495726495727, 9.998290598290598, 10.04017094017094, 10.076068376068376, 
-            10.094017094017094, 10.12991452991453, 10.147863247863247, 10.165811965811965, 
-            10.153846153846153, 10.153846153846153, 10.153846153846153, 10.153846153846153, 
-            10.147863247863247, 10.147863247863247, 10.153846153846153, 10.147863247863247, 
-            10.153846153846153, 10.153846153846153
-        ]
-
-        y_sage = [
-            -1.5251141552511418, -1.4908675799086761, -1.4566210045662102, -1.4223744292237446, 
-            -1.399543378995434, -1.388127853881279, -1.388127853881279, -1.399543378995434, 
-            -1.4566210045662102, -1.5251141552511418, -1.5936073059360734, -1.719178082191781, 
-            -1.8105022831050233, -1.936073059360731, -2.050228310502283, -2.1757990867579915, 
-            -2.301369863013699, -2.438356164383562, -2.5525114155251147, -2.678082191780822, 
-            -2.7694063926940644, -2.9178082191780828, -3.0319634703196354, -3.168949771689498, 
-            -3.248858447488585, -3.4200913242009134, -3.5684931506849322, -3.7739726027397267, 
-            -3.9337899543379002, -4.093607305936073, -4.264840182648403, -4.458904109589041, 
-            -4.595890410958905, -4.755707762557079, -4.892694063926941, -5.08675799086758, 
-            -5.212328767123289, -5.349315068493151, -5.474885844748859, -5.589041095890412, 
-            -5.76027397260274, -5.885844748858449
-        ]
-
-
-        return x_sage, y_sage
-    
-class H2MF(Constraint):
-    """Common logic for SMF constraints"""
-
-    domain = (8, 12)
-
-    def get_model_x_y(self, _, _2, _3, _4, _5, _6, _7, _8, _9, hist_H2mf):
-        y = hist_H2mf[0,:]
-        ind = np.where(y < 0.)
-        return xmf4[ind], y[ind]
-
-class H2MF_z0(H2MF):
-    """The SMF constraint at z=0"""
-
-    z = [0]
-
-    def get_obs_x_y_err(self):
-
-        ObrRaw = np.array([
-        [7.300,   -1.104],
-        [7.576,   -1.302],
-        [7.847,   -1.250],
-        [8.133,   -1.240],
-        [8.409,   -1.344],
-        [8.691,   -1.479],
-        [8.956,   -1.792],
-        [9.231,   -2.271],
-        [9.507,   -3.198],
-        [9.788,   -5.062 ]        ], dtype=np.float32)
-
-        x_obs = np.log10(10**(ObrRaw[:, 0])  /self.h0/self.h0)
-        y_obs = np.log10((10**(ObrRaw[:, 1]) * self.h0*self.h0*self.h0))
-        err = np.zeros(len(y_obs))
-
-
-        return x_obs, y_obs, err, err
-    
-    def get_sage_x_y(self):
-        x_sage = [
-            8.02991452991453, 8.101709401709401, 8.179487179487179, 8.239316239316238, 
-            8.32905982905983, 8.412820512820513, 8.49059829059829, 8.592307692307692, 
-            8.688034188034187, 8.807692307692308, 8.96923076923077, 9.064957264957265, 
-            9.178632478632478, 9.28034188034188, 9.4, 9.51965811965812, 
-            9.633333333333333, 9.758974358974358, 9.878632478632479, 9.992307692307692, 
-            10.123931623931623, 10.243589743589743, 10.357264957264958, 10.506837606837607, 
-            10.584615384615384, 10.662393162393162, 10.740170940170941, 10.77008547008547, 
-            10.817948717948717, 10.85982905982906, 10.931623931623932, 10.96153846153846, 
-            11.057264957264957, 11.063247863247863, 11.057264957264957, 11.063247863247863, 
-            11.063247863247863, 11.063247863247863
-        ]
-
-        y_sage = [
-            -2.073059360730594, -2.0159817351598175, -1.936073059360731, -1.8333333333333337, 
-            -1.7305936073059365, -1.6392694063926945, -1.5136986301369866, -1.4223744292237446, 
-            -1.3424657534246578, -1.3310502283105026, -1.388127853881279, -1.445205479452055, 
-            -1.5821917808219181, -1.7077625570776258, -1.8219178082191783, -1.9132420091324205, 
-            -2.0045662100456623, -2.1073059360730597, -2.210045662100457, -2.32420091324201, 
-            -2.4497716894977173, -2.621004566210046, -2.6324200913242013, -2.8264840182648405, 
-            -2.9634703196347036, -3.23744292237443, -3.4543378995433796, -3.7054794520547953, 
-            -3.9680365296803655, -4.230593607305936, -4.595890410958905, -4.801369863013699, 
-            -4.812785388127854, -5.06392694063927, -5.315068493150686, -5.497716894977169, 
-            -5.76027397260274, -5.8744292237442925
-        ]
-
-
-
-        return x_sage, y_sage
 
 _constraint_re = re.compile((r'([0-9_a-zA-Z]+)' # name
                               r'(?:\(([0-9\.]+)-([0-9\.]+)\))?' # domain boundaries
@@ -1713,14 +1473,12 @@ def parse(spec, snapshot=None, sim=None, boxsize=None, vol_frac=None, age_alist_
         'SMF_z104': SMF_z104,
         'BHBM_z0': BHBM_z0,
         'BHBM_z20': BHBM_z20,
-        'HSMR_z0': HSMR_z0,
-        'HSMR_z05': HSMR_z05,
-        'HSMR_z10': HSMR_z10,
-        'HSMR_z20': HSMR_z20,
-        'HSMR_z30': HSMR_z30,
-        'HSMR_z40': HSMR_z40,
-        'H1MF_z0': H1MF_z0,
-        'H2MF_z0': H2MF_z0
+        'HSMR_z0' : HSMR_z0,
+        'HSMR_z05' : HSMR_z05,
+        'HSMR_z10' : HSMR_z10,
+        'HSMR_z20' : HSMR_z20,
+        'HSMR_z30' : HSMR_z30,
+        'HSMR_z40' : HSMR_z40
     }
 
     def _parse(s,output_dir):
