@@ -15,7 +15,7 @@ warnings.filterwarnings("ignore")
 # ========================== USER OPTIONS ==========================
 
 # File details
-DirName = '/Users/mbradley/Documents/sage-model/output/millennium/'
+DirName = '/Users/mbradley/Documents/PhD/SAGE-GAS/output/millennium/'
 FileName = 'model_0.hdf5'
 
 # Simulation details
