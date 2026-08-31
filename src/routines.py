@@ -1003,12 +1003,30 @@ def read_sage_hdf(frp, snap_num=None, fields=None):
         
         # Extract each specified parameter
         data = {}
+        missing = []
         for field_name, field_type in Galdesc:
             try:
                 data[field_name] = np.array(snapshot_data[field_name])
             except KeyError:
-                print(f"Parameter '{field_name}' not found in snapshot '{snap_num}'")
-    
+                missing.append(field_name)
+
+        # Fill absent fields with zeros rather than omitting them.  Callers index
+        # the returned dict directly (e.g. G['H1gas'] in constraints.py), so a
+        # missing key raised KeyError downstream and made the whole catalogue
+        # unreadable.  This matters for SAGE16 output, which has no H1gas/H2gas
+        # because it does not split the cold gas into atomic and molecular
+        # phases -- without this, SAGE16 cannot be scored on ANY constraint,
+        # including the stellar mass function, which needs neither field.
+        # Constraints that genuinely depend on a missing field will produce
+        # empty or zero results and must be reported as not applicable, not as
+        # a fit.
+        if missing:
+            n = len(next(iter(data.values()))) if data else 0
+            for field_name in missing:
+                data[field_name] = np.zeros(n, dtype=np.float32)
+            print(f"Fields absent from '{snap_num}', filled with zeros: "
+                  f"{', '.join(missing)}")
+
     return data
 
 def galdtype_sage(Nannuli=30, Nage=1):

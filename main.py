@@ -164,7 +164,12 @@ def main():
     pso_opts = parser.add_argument_group('PSO options')
     pso_opts.add_argument('-s', '--swarm-size', help='Size of the particle swarm. Defaults to 10 + sqrt(D) * 2 (D=number of dimensions)',
                           type=int, default=None)
-    pso_opts.add_argument('-m', '--max-iterations', help='Maximum number of iterations to reach before giving up, defaults to 20',
+    pso_opts.add_argument('-m', '--max-iterations', help='Maximum number of iterations before giving up (default 10). '
+                               'NOTE: this said "defaults to 20" while the code used 10, '
+                               'so runs that did not pass -m explicitly were half as long '
+                               'as the documentation implied. 10 iterations x ~15 particles '
+                               'is only ~150 evaluations for an 8-D space; use several '
+                               'hundred at minimum for a production calibration.',
                           default=10, type=int)
     pso_opts.add_argument('--max-stagnation', help='Stop if no improvement for this many consecutive iterations, defaults to 15',
                           default=15, type=int)

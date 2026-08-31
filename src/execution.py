@@ -70,7 +70,16 @@ def _evaluate(constraint, stat_test, modeldir, subvols):
     y_obs, y_mod, err = constraint.get_data(modeldir, subvols)
     score = stat_test(y_obs, y_mod, err)
     n = len(y_obs)
-    return score / n if n > 0 else score   # reduced chi² — equal weight per data point
+    if n == 0:
+        # Previously this returned the raw score of empty arrays, i.e. 0.0, so a
+        # constraint with no observations in its domain looked like a perfect
+        # fit AND still consumed its share of the relative weight -- silently
+        # diluting the objective for every other constraint.  Fail instead.
+        raise ValueError(
+            '%s produced no data points in its domain %s. Check that the '
+            'observation covers this redshift and mass range.'
+            % (type(constraint).__name__, getattr(constraint, 'domain', '?')))
+    return score / n   # reduced chi² — equal weight per data point
 
 count = 0
 def run_sage_hpc(particles, *args):

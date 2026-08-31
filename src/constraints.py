@@ -653,6 +653,129 @@ class BHMF_z10(BHMF):
         return x_sage, y_sage
 
 
+
+# ---------------------------------------------------------------------------
+# Modern observational loaders (added 29 Aug 2026).
+#
+# The calibration previously constrained against older data than the paper
+# compares its figures to -- COSMOS2020 in the constraints vs COSMOS-Web in
+# Figure 12, D'Silva+2023 vs COSMOS-Web in Figure 3, Li+2009 at z=0 vs GAMA in
+# Figure 6.  These close that gap so the model is fitted to the same data it is
+# shown against.
+#
+# On COMBINING datasets: concatenating surveys that OVERLAP in mass or redshift
+# double-weights the overlapping bins and inflates chi2 with inter-survey
+# systematic offsets, which are not model error.  Combining is therefore done
+# only where ranges are complementary; elsewhere the most recent appropriate
+# survey is used on its own.
+# ---------------------------------------------------------------------------
+
+def _np_load_cols(relpath, cols, skiprows=0):
+    """Load whitespace columns relative to src/.
+
+    ECSV files carry an uncommented column-name row after the '#'-prefixed
+    header.  np.loadtxt's skiprows counts every line including comments, so it
+    cannot skip that row reliably; instead drop '#' lines and any leading row
+    that will not parse as numbers.
+    """
+    import os as _os
+    f = _os.path.join(_os.path.dirname(__file__), relpath)
+    rows = [l.split() for l in open(f)
+            if not l.lstrip().startswith('#') and l.strip()]
+    rows = rows[skiprows:]
+    while rows:
+        try:
+            [float(rows[0][i]) for i in cols]
+            break
+        except (ValueError, IndexError):
+            rows = rows[1:]
+    arr = np.array([[float(rw[i]) for i in cols] for rw in rows])
+    return tuple(arr[:, k] for k in range(len(cols)))
+
+
+def _load_paper_smf(zlo, zhi, h_model, labels=None):
+    """SMF observations exactly as plotted in the paper's Figure 12.
+
+    Reads data/paper_smf_observations.csv, generated from the paper's own
+    loader by data/build_paper_observations.py, so the calibration is fitted to
+    the same data the model is shown against.  log_phi and the errors are
+    already in dex and already carry the h and IMF corrections paper_plots
+    applies, so nothing further is done to them here.
+
+    zlo, zhi  select datasets whose quoted redshift falls in [zlo, zhi).
+    labels    optional whitelist, e.g. ('Baldry+08',), for redshift bins where
+              several surveys overlap and combining them would double-weight
+              shared mass bins.
+    """
+    import os as _os
+    f = _os.path.join(_os.path.dirname(__file__), '../data/paper_smf_observations.csv')
+    rows = [l.split() for l in open(f)
+            if not l.lstrip().startswith('#') and l.strip()][1:]
+    lm, lp, el, eh = [], [], [], []
+    seen = set()
+    for rw in rows:
+        lab, z = rw[0], float(rw[1])
+        if not (zlo <= z < zhi):
+            continue
+        if labels is not None and lab.replace('_', ' ') not in labels:
+            continue
+        seen.add(lab)
+        lm.append(float(rw[2])); lp.append(float(rw[3]))
+        el.append(float(rw[4])); eh.append(float(rw[5]))
+    if not lm:
+        raise ValueError('no paper SMF observations in %g <= z < %g (labels=%r)'
+                         % (zlo, zhi, labels))
+    o = np.argsort(lm)
+    return (np.array(lm)[o], np.array(lp)[o], np.array(el)[o], np.array(eh)[o])
+
+
+def _load_cosmosweb_smf(z_label, h_model):
+    """COSMOS-Web SMF for one redshift bin -- the table Figure 12 plots.
+
+    data/cosmosweb_smf.ecsv columns: Redshift (quoted bin label), M_star
+    (log10), Phi (linear Mpc^-3 dex^-1), dPhi (linear, symmetric).  h_obs = 0.7.
+    """
+    import os as _os
+    f = _os.path.join(_os.path.dirname(__file__), '../data/cosmosweb_smf.ecsv')
+    rows = [l.rstrip('\n') for l in open(f) if not l.startswith('#') and l.strip()]
+    want = z_label.replace(' ', '')
+    lm, phi, dphi = [], [], []
+    for line in rows[1:]:
+        m = re.match(r'\s*"([^"]+)"\s+(\S+)\s+(\S+)\s+(\S+)', line)
+        if m and m.group(1).replace(' ', '') == want:
+            lm.append(float(m.group(2)))
+            phi.append(float(m.group(3)))
+            dphi.append(float(m.group(4)))
+    if not lm:
+        labels = sorted({re.match(r'\s*"([^"]+)"', l).group(1)
+                         for l in rows[1:] if re.match(r'\s*"', l)})
+        raise ValueError('COSMOS-Web has no bin %r (available: %s)'
+                         % (z_label, '; '.join(labels)))
+    lm, phi, dphi = np.array(lm), np.array(phi), np.array(dphi)
+    ok = phi > 0
+    lm, phi, dphi = lm[ok], phi[ok], dphi[ok]
+
+    h_obs = 0.7
+    x_obs = lm + 2.0 * np.log10(h_obs / h_model)
+    y_obs = np.log10(phi) + 3.0 * np.log10(h_model / h_obs)
+    lo = np.maximum(phi - dphi, phi * 1e-6)     # guard dphi >= phi
+    return x_obs, y_obs, np.log10(phi) - np.log10(lo), np.log10(phi + dphi) - np.log10(phi)
+
+
+def _load_gama_driver2022(h_model):
+    """z=0 SMF, Driver et al. (2022) Table 6 (GAMA), h_obs = 0.7.
+
+    Replaces Li+2009 (SDSS), which the constraint used while Figure 6 compares
+    against GAMA.  Columns 0-2 are logM*, log phi, and its uncertainty in dex.
+    """
+    lm, lphi, elphi = _np_load_cols('../data/GAMA_SMF.dat', (0, 1, 2))
+    ok = np.isfinite(lm) & np.isfinite(lphi) & np.isfinite(elphi) & (elphi > 0)
+    lm, lphi, elphi = lm[ok], lphi[ok], elphi[ok]
+    h_obs = 0.7
+    return (lm + 2.0 * np.log10(h_obs / h_model),
+            lphi + 3.0 * np.log10(h_model / h_obs), elphi, elphi)
+
+
 class SMF(Constraint):
     """Common logic for SMF constraints"""
 
@@ -670,16 +793,8 @@ class SMF_z0(SMF):
     z = [0]
 
     def get_obs_x_y_err(self):
-        # Li & White (2009): masses in Msun/h^2 and phi in (Mpc/h)^-3 at h=0.7 (file footer).
-        # Correct conversion to physical units at h0: x - 2*log10(h0), y + 3*log10(h0).
-        lm, p, dpdn, dpup = self.load_observation('../data/SMF_Li2009.dat', cols=[0,1,2,3])
-        x_obs = lm - 2.0 * np.log10(self.h0)   # Msun/h^2 → physical Msun at h0
-        y_obs = p + 3.0 * np.log10(self.h0)    # (Mpc/h)^-3 → physical Mpc^-3 at h0
-        y_dn = dpdn
-        y_up = dpup
+        return _load_paper_smf(0.0, 0.2, self.h0, labels=('Baldry+08',))
 
-        return x_obs, y_obs, y_dn, y_up
-    
     def get_sage_x_y(self):
         # Load data from SAGE
         logm, phi = self.load_observation('../data/sage_smf_all_redshifts.csv', cols=[0,1])
@@ -697,18 +812,8 @@ class SMF_z05(SMF):
     z = [0.5]
 
     def get_obs_x_y_err(self):
-        # Weaver+2022 COSMOS2020: physical Msun and physical Mpc^-3 at h=0.7.
-        # Convert physical-at-h_obs to physical-at-h0: M ∝ H0^-2, phi ∝ H0^3
-        lm, pD, dn, du = self.load_observation('../data/COSMOS2020/SMF_Farmer_v2.1_0.2z0.5_total.txt', cols=[0,2,3,4])
-        h_obs = 0.7
-        x_obs = lm + 2.0 * np.log10(h_obs / self.h0)
-        y_obs = np.log10(pD) + 3.0 * np.log10(self.h0 / h_obs)
-        dn = np.maximum(dn, pD * 1e-6)  # guard against dn<=0 at bright end
-        y_dn = np.log10(pD) - np.log10(dn)
-        y_up = np.log10(du) - np.log10(pD)
+        return _load_paper_smf(0.5, 0.8, self.h0)
 
-        return x_obs, y_obs, y_dn, y_up
-    
     def get_sage_x_y(self):
         # Load data from SAGE
         logm, phi = self.load_observation('../data/sage_smf_all_redshifts.csv', cols=[4,5])
@@ -726,17 +831,8 @@ class SMF_z10(SMF):
     z = [1.0]
 
     def get_obs_x_y_err(self):
-        # Weaver+2022 COSMOS2020: physical Msun and physical Mpc^-3 at h=0.7.
-        lm, pD, dn, du = self.load_observation('../data/COSMOS2020/SMF_Farmer_v2.1_0.8z1.1_total.txt', cols=[0,2,3,4])
-        h_obs = 0.7
-        x_obs = lm + 2.0 * np.log10(h_obs / self.h0)
-        y_obs = np.log10(pD) + 3.0 * np.log10(self.h0 / h_obs)
-        dn = np.maximum(dn, pD * 1e-6)  # guard against dn<=0 at bright end
-        y_dn = np.log10(pD) - np.log10(dn)
-        y_up = np.log10(du) - np.log10(pD)
+        return _load_paper_smf(0.8, 1.2, self.h0)
 
-        return x_obs, y_obs, y_dn, y_up
-    
     def get_sage_x_y(self):
         # Load data from SAGE
         logm, phi = self.load_observation('../data/sage_smf_extra_redshifts.csv', cols=[4,5])
@@ -754,17 +850,8 @@ class SMF_z20(SMF):
     z = [2.0]
 
     def get_obs_x_y_err(self):
-        # Weaver+2022 COSMOS2020: physical Msun and physical Mpc^-3 at h=0.7.
-        lm, pD, dn, du = self.load_observation('../data/COSMOS2020/SMF_Farmer_v2.1_1.5z2.0_total.txt', cols=[0,2,3,4])
-        h_obs = 0.7
-        x_obs = lm + 2.0 * np.log10(h_obs / self.h0)
-        y_obs = np.log10(pD) + 3.0 * np.log10(self.h0 / h_obs)
-        dn = np.maximum(dn, pD * 1e-6)  # guard against dn<=0 at bright end
-        y_dn = np.log10(pD) - np.log10(dn)
-        y_up = np.log10(du) - np.log10(pD)
+        return _load_paper_smf(1.8, 2.3, self.h0)
 
-        return x_obs, y_obs, y_dn, y_up
-    
     def get_sage_x_y(self):
         # Load data from SAGE
         logm, phi = self.load_observation('../data/sage_smf_all_redshifts.csv', cols=[12,13])
@@ -782,17 +869,8 @@ class SMF_z30(SMF):
     z = [3.0]
 
     def get_obs_x_y_err(self):
-        # Weaver+2022 COSMOS2020: physical Msun and physical Mpc^-3 at h=0.7.
-        lm, pD, dn, du = self.load_observation('../data/COSMOS2020/SMF_Farmer_v2.1_2.5z3.0_total.txt', cols=[0,2,3,4])
-        h_obs = 0.7
-        x_obs = lm + 2.0 * np.log10(h_obs / self.h0)
-        y_obs = np.log10(pD) + 3.0 * np.log10(self.h0 / h_obs)
-        dn = np.maximum(dn, pD * 1e-6)  # guard against dn<=0 at bright end
-        y_dn = np.log10(pD) - np.log10(dn)
-        y_up = np.log10(du) - np.log10(pD)
+        return _load_paper_smf(2.8, 3.3, self.h0)
 
-        return x_obs, y_obs, y_dn, y_up
-    
     def get_sage_x_y(self):
         # Load data from SAGE
         logm, phi = self.load_observation('../data/sage_smf_all_redshifts.csv', cols=[16,17])
@@ -810,17 +888,8 @@ class SMF_z40(SMF):
     z = [4.0]
 
     def get_obs_x_y_err(self):
-        # Weaver+2022 COSMOS2020: physical Msun and physical Mpc^-3 at h=0.7.
-        lm, pD, dn, du = self.load_observation('../data/COSMOS2020/SMF_Farmer_v2.1_3.5z4.5_total.txt', cols=[0,2,3,4])
-        h_obs = 0.7
-        x_obs = lm + 2.0 * np.log10(h_obs / self.h0)
-        y_obs = np.log10(pD) + 3.0 * np.log10(self.h0 / h_obs)
-        dn = np.maximum(dn, pD * 1e-6)  # guard against dn<=0 at bright end
-        y_dn = np.log10(pD) - np.log10(dn)
-        y_up = np.log10(du) - np.log10(pD)
+        return _load_paper_smf(3.8, 4.3, self.h0)
 
-        return x_obs, y_obs, y_dn, y_up
-    
     def get_sage_x_y(self):
         # Load data from SAGE
         logm, phi = self.load_observation('../data/sage_smf_all_redshifts.csv', cols=[20,21])
@@ -843,6 +912,14 @@ def _load_stefanon2021(redshift_bin, h_model):
     raw = np.genfromtxt(data_file, comments='#', skip_header=1,
                         names=['z', 'lm', 'dlm', 'phi', 'eu', 'el'])
     sel = raw['z'] == redshift_bin
+    if not np.any(sel):
+        available = sorted(set(raw['z'][np.isfinite(raw['z'])].tolist()))
+        raise ValueError(
+            'Stefanon+2021 has no z=%g bin (available: %s). SMF_z50 requests '
+            'z=5, which this dataset does not cover -- no shipped high-z SMF '
+            'does. Returning an empty observation silently contributes 0 to '
+            'the objective while still consuming its weight, so this raises '
+            'instead.' % (redshift_bin, ', '.join('%g' % z for z in available)))
     lm  = raw['lm'][sel]
     phi = raw['phi'][sel] * 1e-4        # → Mpc^-3 dex^-1
     eu  = raw['eu'][sel]  * 1e-4
@@ -860,14 +937,57 @@ def _load_stefanon2021(redshift_bin, h_model):
     return x_obs, y_obs, y_dn, y_up
 
 
+def _load_song2016(redshift_bin, h_model):
+    """Load Song et al. (2016) SMF for a given integer redshift bin.
+
+    Wide-format ECSV: one row per log_M, with phi_z4..phi_z8 columns.  Unlike
+    Stefanon+2021 the phi columns are ALREADY log10(phi) and the errors are
+    already in dex, so no logarithm is taken here.  h_obs = 0.7.
+
+    Used for SMF_z50 because Stefanon+2021 -- and every other high-z SMF shipped
+    with SAGE26 (Navarro-Carrera, Weibel, Kikuchihara) -- starts at z=6.  Song is
+    the only shipped dataset covering z=5, and it is the same one Figure 12 uses
+    in its 4.5 < z < 5.5 panel, so the constraint and the figure agree.
+    """
+    import os as _os
+    data_file = _os.path.join(_os.path.dirname(__file__), '../data/song_smf_2016.ecsv')
+    rows = [l.split() for l in open(data_file)
+            if not l.startswith('#') and l.strip()]
+    hdr, rows = rows[0], rows[1:]
+    try:
+        i_m = hdr.index('log_M')
+        i_p = hdr.index('phi_z%d' % redshift_bin)
+        i_u = hdr.index('phi_z%d_err_up' % redshift_bin)
+        i_l = hdr.index('phi_z%d_err_lo' % redshift_bin)
+    except ValueError:
+        avail = sorted(int(c[5:]) for c in hdr if c.startswith('phi_z') and c[5:].isdigit())
+        raise ValueError('Song+2016 has no z=%g column (available: %s)'
+                         % (redshift_bin, ', '.join(str(z) for z in avail)))
+
+    arr = np.array([[float(r[i]) for i in (i_m, i_p, i_u, i_l)] for r in rows])
+    lm, lphi, eu, el = arr[:, 0], arr[:, 1], arr[:, 2], arr[:, 3]
+    valid = np.isfinite(lm) & np.isfinite(lphi) & np.isfinite(eu) & np.isfinite(el)
+    lm, lphi, eu, el = lm[valid], lphi[valid], eu[valid], el[valid]
+
+    h_obs = 0.7
+    x_obs = lm - 2.0 * np.log10(h_obs / h_model)
+    y_obs = lphi + 3.0 * np.log10(h_obs / h_model)
+    return x_obs, y_obs, el, eu      # errors already in dex
+
+
 class SMF_z50(SMF):
-    """SMF at z~5, Stefanon et al. (2021)  [data: logM 7.5–10.5]"""
+    """SMF at z~5, Song et al. (2016)  [data: logM 7.25–11.25]
+
+    Stefanon+2021 was used here originally but has no z=5 bin -- it covers
+    z = 6-10 -- so this constraint silently returned an empty observation,
+    which scored 0.0 while still consuming its share of the objective weight.
+    """
 
     z = [5.0]
     domain = (7.5, 10.5)
 
     def get_obs_x_y_err(self):
-        return _load_stefanon2021(5, self.h0)
+        return _load_paper_smf(4.8, 5.3, self.h0)
 
     def get_sage_x_y(self):
         return np.zeros(0), np.zeros(0)
@@ -880,7 +1000,7 @@ class SMF_z60(SMF):
     domain = (7.5, 11.0)
 
     def get_obs_x_y_err(self):
-        return _load_stefanon2021(6, self.h0)
+        return _load_paper_smf(5.8, 6.3, self.h0)
 
     def get_sage_x_y(self):
         return np.zeros(0), np.zeros(0)
@@ -893,7 +1013,7 @@ class SMF_z70(SMF):
     domain = (7.5, 10.5)
 
     def get_obs_x_y_err(self):
-        return _load_stefanon2021(7, self.h0)
+        return _load_paper_smf(6.8, 7.3, self.h0)
 
     def get_sage_x_y(self):
         return np.zeros(0), np.zeros(0)
@@ -906,7 +1026,7 @@ class SMF_z80(SMF):
     domain = (7.5, 10.5)
 
     def get_obs_x_y_err(self):
-        return _load_stefanon2021(8, self.h0)
+        return _load_paper_smf(7.8, 8.3, self.h0)
 
     def get_sage_x_y(self):
         return np.zeros(0), np.zeros(0)
@@ -916,10 +1036,11 @@ class SMF_z100(SMF):
     """SMF at z~10, Stefanon et al. (2021)  [data: logM 7.65–8.75]"""
 
     z = [10.0]
-    domain = (7.5, 9.0)
+    domain = (7.5, 10.0)   # widened: the combined
+                           # Stefanon+COSMOS-Web sample reaches logM 9.77
 
     def get_obs_x_y_err(self):
-        return _load_stefanon2021(10, self.h0)
+        return _load_paper_smf(9.5, 11.0, self.h0)
 
     def get_sage_x_y(self):
         return np.zeros(0), np.zeros(0)
@@ -1007,7 +1128,9 @@ class CSFRDH(Constraint):
 
     # Snapshots are now simulation-specific, set in __init__
     z = None  # Will be set dynamically based on simulation
-    domain = (0, 12) # look-back time in Gyr
+    domain = (0, 12.62)  # look-back time in Gyr; 12.62 Gyr = z=6
+                         # (12.0 was only z=4.02, while the paper
+                         # states the CSFRD constrains to z=6)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1016,34 +1139,32 @@ class CSFRDH(Constraint):
         self.snapshot = self.z
     
     def get_obs_x_y_err(self):
-#        zmin, zmax, logSFRD, err1, err2, err3 = self.load_observation('../data/Driver_SFRD.dat', cols=[1,2,3,5,6,7])
-        my_cosmo = [100*self.h0, 0.0, self.Omega0, 1.0-self.Omega0]
-        D18_cosmo = [70.0, 0., 0.3, 0.7]
+        """COSMOS-Web cosmic SFR density, inferred from the stellar mass density.
 
-        D23_0, D23_1, D23_2, D23_3, D23_4, D23_5 = self.load_observation('../data/CSFH_DSILVA+23_Ver_Final.csv', cols=[0,1,2,3,4,5])
-        D23 = np.column_stack((D23_0, D23_1, D23_2, D23_3, D23_4, D23_5))
-        z_D23 = D23[:,3]
-        tLB_D23 = np.array([r.z2tL(z, self.h0, self.Omega0,  1.0-self.Omega0) for z in z_D23])
-        CSFH_D23 = D23[:,0]
-        for i in range(len(z_D23)):
-            CSFH_D23[i] += np.log10( r.z2dA(z_D23[i], *my_cosmo) / r.z2dA(z_D23[i], *D18_cosmo) )*2 # adjust for assumed-cosmology influence on SFR calculations
-            CSFH_D23[i] += np.log10( (r.comoving_distance(D23[i,3]+D23[i,4], *D18_cosmo)**3 - r.comoving_distance(D23[i,3]-D23[i,5], *D18_cosmo)**3) / (r.comoving_distance(D23[i,3]+D23[i,4], *my_cosmo)**3 - r.comoving_distance(D23[i,3]-D23[i,5], *my_cosmo)**3) )# adjust for assumed-cosmology influence on comoving volume
-#        
-#        Np = len(logSFRD)
-#        x_obs = np.zeros(Np)
-#        y_obs = np.zeros(Np)
-#        for i in range(Np):
-#            z_av = 0.5*(zmin[i]+zmax[i])
-#            x_obs[i] = r.z2tL(z_av, h0, Omega0,  1.0-Omega0)
-#            y_obs[i] = logSFRD[i] + \
-#                        np.log10( pow(r.comoving_distance(zmax[i], *D18_cosmo), 3.0) - pow(r.comoving_distance(zmin[i], *D18_cosmo), 3.0) ) - \
-#                        np.log10( pow(r.comoving_distance(zmax[i], *my_cosmo), 3.0) - pow(r.comoving_distance(zmin[i], *my_cosmo), 3.0) ) + \
-#                        np.log10( r.z2dA(z_av, *my_cosmo) / r.z2dA(z_av, *D18_cosmo) ) * 2.0 # adjust for cosmology on comoving volume and luminosity of objects
-#            
-#        err_total = err1 + err2 + err3
-        
-        return tLB_D23, CSFH_D23, D23[:,2], D23[:,1]
-        
+        Replaces D'Silva+2023, which this constraint used while Figure 3 of the
+        paper compares against COSMOS-Web.  The source table is a densely
+        sampled curve (4001 rows, z = 0 to 17.6); scoring every row would hand
+        this one constraint ~4000 of the objective's data points and swamp
+        every other constraint, so it is subsampled onto evenly spaced
+        lookback-time points.  Errors are the 16th/84th percentile band.
+        """
+        z_all, s50, s16, s84 = _np_load_cols(
+            '../data/CSFRD_inferred_from_SMD.ecsv', (0, 1, 2, 3))
+        ok = np.isfinite(z_all) & (s50 > 0) & (s16 > 0) & (s84 > 0)
+        z_all, s50, s16, s84 = z_all[ok], s50[ok], s16[ok], s84[ok]
+
+        tL = np.array([r.z2tL(z, self.h0, self.Omega0, 1.0 - self.Omega0)
+                       for z in z_all])
+        lo, hi = self.domain
+        sel = (tL >= lo) & (tL <= hi)
+        tL, s50, s16, s84 = tL[sel], s50[sel], s16[sel], s84[sel]
+
+        targets = np.linspace(tL.min(), tL.max(), 25)
+        idx = np.unique([int(np.argmin(np.abs(tL - tt))) for tt in targets])
+
+        y_obs = np.log10(s50[idx])
+        return tL[idx], y_obs, y_obs - np.log10(s16[idx]), np.log10(s84[idx]) - y_obs
+
     def get_model_x_y(self, hist_smf, hist_bhmf, hist_himf, TimeBinEdge, SFRD_Age, BlackHoleMass, BulgeMass, HaloMass, StellarMass, hist_smf_red, hist_smf_blue, hist_smf_err, hist_smf_red_err, hist_smf_blue_err, hist_bhmf_err, hist_himf_err, hist_h2mf, hist_h2mf_err, smd, metallicity, stellar_mass_mzr, halo_mass_shmr, stellar_mass_shmr):
         # TimeBinEdge now contains the actual snapshot times (lookback times in Gyr) for CSFRDH
         # Ignore the hist_smf and hist_bhmf arrays which contain -20 values
